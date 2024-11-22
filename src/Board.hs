@@ -1,5 +1,6 @@
 module Board where
 import Data.List (transpose)
+import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
 
 -- Basic Board definition without Gadts
 
@@ -171,9 +172,6 @@ winColBoard = B c1 c2 c3 c4 c5 c6 c7
     c6 = emptyCol
     c7 = emptyCol
 
--- >>> checkWinCondition winColBoard Yellow
--- True
-
 winRowBoard :: Board
 winRowBoard = B c1 c2 c3 c4 c5 c6 c7
   where
@@ -185,11 +183,8 @@ winRowBoard = B c1 c2 c3 c4 c5 c6 c7
     c6 = C (NonEmpty Yellow) Empty Empty Empty Empty Empty
     c7 = C (NonEmpty Yellow) Empty Empty Empty Empty Empty
 
--- >>> checkWinCondition winRowBoard Red
--- True
-
 winDiagonalBoard :: Board
-winDiagonalBoard =  B c1 c2 c3 c4 c5 c6 c7
+winDiagonalBoard = B c1 c2 c3 c4 c5 c6 c7
   where
     c1 = emptyCol
     c2 = emptyCol
@@ -199,11 +194,8 @@ winDiagonalBoard =  B c1 c2 c3 c4 c5 c6 c7
     c6 = C (NonEmpty Yellow) Empty Empty Empty Empty Empty
     c7 = emptyCol
 
--- >>> checkWinCondition winDiagonalBoard Yellow
--- True
-
 winAntiDiagonalBoard :: Board
-winAntiDiagonalBoard =  B c1 c2 c3 c4 c5 c6 c7
+winAntiDiagonalBoard = B c1 c2 c3 c4 c5 c6 c7
   where
     c1 = emptyCol
     c2 = emptyCol
@@ -213,5 +205,31 @@ winAntiDiagonalBoard =  B c1 c2 c3 c4 c5 c6 c7
     c6 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Red) Empty Empty Empty
     c7 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) Empty Empty
 
--- >>> checkWinCondition winAntiDiagonalBoard Red
--- True
+exampleBoard1 :: Board
+exampleBoard1 = B c1 c2 c3 c4 c5 c6 c7
+  where
+    c1 = emptyCol
+    c2 = emptyCol
+    c3 = emptyCol
+    c4 = C (NonEmpty Red) (NonEmpty Yellow) Empty Empty Empty Empty
+    c5 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty Empty
+    c6 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
+    c7 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) Empty Empty
+
+test_win_conditions :: Test
+test_win_conditions =
+  "win conditions tests"
+    ~: TestList
+      [
+        checkWinCondition winColBoard Yellow ~?= True,
+        checkWinCondition winColBoard Red ~?= False,
+        checkWinCondition winRowBoard Red ~?= True,
+        checkWinCondition winDiagonalBoard Yellow ~?= True,
+        checkWinCondition winDiagonalBoard Red ~?= False,
+        checkWinCondition winAntiDiagonalBoard Red ~?= True,
+        checkWinCondition emptyBoard Red ~?= False,
+        checkWinCondition exampleBoard1 Red ~?= False
+      ]
+
+-- >>> runTestTT test_win_conditions
+-- Counts {cases = 8, tried = 8, errors = 0, failures = 0}
