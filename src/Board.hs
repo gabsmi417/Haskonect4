@@ -1,6 +1,26 @@
-module Board where
+module Board (
+  Board,
+  Color,
+  Column,
+  Piece,
+  End(Win, Tie),
+  insert,
+  showBoard,
+  checkWinCondition
+) where
 import Data.List (transpose)
 import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
+import Test.QuickCheck
+  ( Arbitrary (..),
+    Gen,
+    Property,
+    Testable (..),
+    (==>),
+    elements,
+    chooseInt
+  )
+import qualified Test.QuickCheck as QC
+import Data.Maybe (fromMaybe)
 
 -- Basic Board definition without Gadts
 
@@ -8,9 +28,13 @@ data Color where
   Red :: Color
   Yellow :: Color
 
+-- Assumption: Red always goes first
+
 data Piece where
   Empty :: Piece
   NonEmpty :: Color -> Piece
+
+data End = Win Color | Tie deriving (Eq, Show)
 
 {-
 An alternate option for the following objects are using [Piece] lists and [Column] lists
@@ -48,6 +72,12 @@ emptyCol = C Empty Empty Empty Empty Empty Empty
 
 emptyBoard :: Board
 emptyBoard = B emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol
+
+isColFull :: Board -> Int -> Bool
+isColFull b i =
+  case getCol b i of
+    Just (C _ _ _ _ _ (NonEmpty _)) -> True
+    _ -> False
 
 getCol :: Board -> Int -> Maybe Column
 getCol b@(B c1 c2 c3 c4 c5 c6 c7) i =
@@ -103,7 +133,11 @@ testInsert =
 -- >>> testInsert
 -- Just (B (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow) (NonEmpty Red) Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty))
 
--- | convert a column to a row of pieces
+-- | convert a board to a list of columns
+boardToList :: Board -> [Column]
+boardToList (B c1 c2 c3 c4 c5 c6 c7) = [c1, c2, c3, c4, c5, c6, c7]
+
+-- | convert a column to a list of pieces
 columnToList :: Column -> [Piece]
 columnToList (C p1 p2 p3 p4 p5 p6) = [p1, p2, p3, p4, p5, p6]
 
@@ -158,8 +192,16 @@ checkDiagonals :: Board -> Color -> ([[Piece]] -> Color -> (Int, Int) -> Bool) -
 checkDiagonals b c f =
   any (f (rows b) c) [(i, j) | i <- [1..numRows], j <- [1..numCols]]
 
-checkWinCondition :: Board -> Color -> Bool
-checkWinCondition b c = checkRows b c || checkColumns b c || checkDiagonals b c checkDiagonal || checkDiagonals b c checkAntiDiagonal
+checkTie :: Board -> Bool
+checkTie b = Empty `notElem` concatMap columnToList (boardToList b)
+
+checkWinCondition :: Board -> Color -> Maybe End
+checkWinCondition b c =
+  let win = checkRows b c || checkColumns b c || checkDiagonals b c checkDiagonal || checkDiagonals b c checkAntiDiagonal in
+    if win then Just $ Win c
+    else
+      if checkTie b then Just Tie
+      else Nothing
 
 winColBoard :: Board
 winColBoard = B c1 c2 c3 c4 c5 c6 c7
@@ -216,20 +258,108 @@ exampleBoard1 = B c1 c2 c3 c4 c5 c6 c7
     c6 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
     c7 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) Empty Empty
 
+exampleBoard2 :: Board
+exampleBoard2 = B c1 c2 c3 c4 c5 c6 c7
+  where
+    c1 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
+    c2 = emptyCol
+    c3 = emptyCol
+    c4 = emptyCol
+    c5 = emptyCol
+    c6 = emptyCol
+    c7 = emptyCol
+
+test_insert :: Test
+test_insert =
+  "insert tests"
+    ~: TestList
+      [
+        insert emptyBoard (NonEmpty Red) 1 ~?= Just (B (C (NonEmpty Red) Empty Empty Empty Empty Empty) emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol),
+        testInsert ~?= Just (B (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow) (NonEmpty Red) Empty Empty) emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol),
+        insert exampleBoard2 (NonEmpty Red) 1 ~?= Nothing
+      ]
+
+-- >>> runTestTT test_insert
+-- Counts {cases = 3, tried = 3, errors = 0, failures = 0}
+
 test_win_conditions :: Test
 test_win_conditions =
   "win conditions tests"
     ~: TestList
       [
-        checkWinCondition winColBoard Yellow ~?= True,
-        checkWinCondition winColBoard Red ~?= False,
-        checkWinCondition winRowBoard Red ~?= True,
-        checkWinCondition winDiagonalBoard Yellow ~?= True,
-        checkWinCondition winDiagonalBoard Red ~?= False,
-        checkWinCondition winAntiDiagonalBoard Red ~?= True,
-        checkWinCondition emptyBoard Red ~?= False,
-        checkWinCondition exampleBoard1 Red ~?= False
+        checkWinCondition winColBoard Yellow ~?= Just (Win Yellow),
+        checkWinCondition winColBoard Red ~?= Nothing,
+        checkWinCondition winRowBoard Red ~?= Just (Win Red),
+        checkWinCondition winDiagonalBoard Yellow ~?= Just (Win Yellow),
+        checkWinCondition winDiagonalBoard Red ~?= Nothing,
+        checkWinCondition winAntiDiagonalBoard Red ~?= Just (Win Red),
+        checkWinCondition emptyBoard Red ~?= Nothing,
+        checkWinCondition exampleBoard1 Red ~?= Nothing
       ]
 
 -- >>> runTestTT test_win_conditions
 -- Counts {cases = 8, tried = 8, errors = 0, failures = 0}
+
+-- Unit tests to add
+-- check to see if inserting into full results in nothing
+-- check to see if inersting into non-full results in something
+
+-- Quick Check Test Cases
+instance Arbitrary Board where
+  arbitrary :: Gen Board
+  arbitrary = do
+    numMoves <- QC.choose (0, 10)
+    redMoves <- QC.vectorOf numMoves (QC.chooseInt (1, 7))
+    yellowMoves <- QC.vectorOf numMoves (QC.chooseInt (1, 7))
+    let redMoves' = map (, NonEmpty Red) redMoves
+        yellowMoves' = map (, NonEmpty Yellow) yellowMoves
+    return $ buildBoard $ interleave redMoves' yellowMoves'
+
+interleave :: [a] -> [a] -> [a]
+interleave [] ys = ys
+interleave xs [] = xs
+interleave (x : xs) (y : ys) = x : y : interleave xs ys
+
+buildBoard :: [(Int, Piece)] -> Board
+buildBoard = foldr f emptyBoard
+  where
+    f (i, piece) acc =
+      fromMaybe emptyBoard $ insert acc piece i
+
+instance Arbitrary Color where
+  arbitrary :: Gen Color
+  arbitrary = elements [Red, Yellow]
+
+count :: Color -> Board -> Int
+count c b = undefined
+
+simulateGame :: [Int] -> [Int] -> Board -> Maybe Board
+simulateGame redMoves yellowMoves b = undefined
+
+-- check to see if numRed == numYellow || numRead == numYellow + 1 after simulate game (asuming not nothing)
+
+testColorBalance :: Board -> Bool
+testColorBalance b =
+  let r = count Red b
+      y = count Yellow b in
+    r == y || r == y + 1
+
+-- check to see if board filled lower rows before higher ones after simulate game
+
+testValidColumn :: Column -> Bool
+testValidColumn c@(C Empty Empty Empty Empty Empty Empty) = True
+testValidColumn c@(C (NonEmpty p1) Empty Empty Empty Empty Empty) = True
+testValidColumn c@(C (NonEmpty _) (NonEmpty _) Empty Empty Empty Empty) = True
+testValidColumn c@(C (NonEmpty _) (NonEmpty _) (NonEmpty _) Empty Empty Empty) = True
+testValidColumn c@(C (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _) Empty Empty) = True
+testValidColumn c@(C (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _) Empty) = True
+testValidColumn c@(C (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _)) = True
+testValidColumn _ = False
+
+testValidBoardFilling :: Board -> Bool
+testValidBoardFilling b =
+  foldr (\c acc -> testValidColumn c && acc) True (boardToList b)
+
+-- helper function to print the board
+showBoard :: Board -> String
+showBoard = undefined
