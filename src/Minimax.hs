@@ -18,3 +18,4 @@ testOptimalMove b =
       Just b' -> True
       Nothing -> False
 
+-- keep track of number of steps

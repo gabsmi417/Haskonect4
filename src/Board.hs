@@ -45,7 +45,7 @@ but it does allow for nicer inserts
 data Column where
   C :: Piece -> Piece -> Piece -> Piece -> Piece -> Piece -> Column
 
-
+-- add color, Vec
 data Board where
   B :: Column -> Column -> Column -> Column -> Column -> Column -> Column -> Board
 
@@ -78,6 +78,8 @@ isColFull b i =
   case getCol b i of
     Just (C _ _ _ _ _ (NonEmpty _)) -> True
     _ -> False
+
+-- have a validity check - combine col and color
 
 getCol :: Board -> Int -> Maybe Column
 getCol b@(B c1 c2 c3 c4 c5 c6 c7) i =
@@ -336,7 +338,7 @@ count c b = undefined
 simulateGame :: [Int] -> [Int] -> Board -> Maybe Board
 simulateGame redMoves yellowMoves b = undefined
 
--- check to see if numRed == numYellow || numRead == numYellow + 1 after simulate game (asuming not nothing)
+-- check to see if numRed == numYellow || numRed == numYellow + 1 after simulate game (asuming not nothing)
 
 testColorBalance :: Board -> Bool
 testColorBalance b =
