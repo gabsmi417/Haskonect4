@@ -1,9 +1,10 @@
 module Board (
   Board,
-  Color,
+  Color(Red, Yellow),
   Column,
   Piece,
   End(Win, Tie),
+  emptyBoard,
   insert,
   showBoard,
   checkWinCondition
@@ -47,7 +48,7 @@ data Column where
 
 -- add color, Vec
 data Board where
-  B :: Column -> Column -> Column -> Column -> Column -> Column -> Column -> Board
+  B :: Color -> Column -> Column -> Column -> Column -> Column -> Column -> Column -> Board
 
 deriving instance Show Color
 deriving instance Eq Color
@@ -71,7 +72,7 @@ emptyCol :: Column
 emptyCol = C Empty Empty Empty Empty Empty Empty
 
 emptyBoard :: Board
-emptyBoard = B emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol
+emptyBoard = B Red emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol
 
 isColFull :: Board -> Int -> Bool
 isColFull b i =
@@ -82,7 +83,7 @@ isColFull b i =
 -- have a validity check - combine col and color
 
 getCol :: Board -> Int -> Maybe Column
-getCol b@(B c1 c2 c3 c4 c5 c6 c7) i =
+getCol b@(B c c1 c2 c3 c4 c5 c6 c7) i =
   case i of
     1 -> Just c1
     2 -> Just c2
@@ -94,15 +95,15 @@ getCol b@(B c1 c2 c3 c4 c5 c6 c7) i =
     _ -> Nothing
 
 replaceCol :: Board -> Int -> Column -> Maybe Board
-replaceCol b@(B c1 c2 c3 c4 c5 c6 c7) i c' =
+replaceCol b@(B c c1 c2 c3 c4 c5 c6 c7) i c' =
   case i of
-    1 -> Just $ B c' c2 c3 c4 c5 c6 c7
-    2 -> Just $ B c1 c' c3 c4 c5 c6 c7
-    3 -> Just $ B c1 c2 c' c4 c5 c6 c7
-    4 -> Just $ B c1 c2 c3 c' c5 c6 c7
-    5 -> Just $ B c1 c2 c3 c4 c' c6 c7
-    6 -> Just $ B c1 c2 c3 c4 c5 c' c7
-    7 -> Just $ B c1 c2 c3 c4 c5 c6 c'
+    1 -> Just $ B c c' c2 c3 c4 c5 c6 c7
+    2 -> Just $ B c c1 c' c3 c4 c5 c6 c7
+    3 -> Just $ B c c1 c2 c' c4 c5 c6 c7
+    4 -> Just $ B c c1 c2 c3 c' c5 c6 c7
+    5 -> Just $ B c c1 c2 c3 c4 c' c6 c7
+    6 -> Just $ B c c1 c2 c3 c4 c5 c' c7
+    7 -> Just $ B c c1 c2 c3 c4 c5 c6 c'
     _ -> Nothing
 
 insertIntoCol :: Column -> Piece -> Maybe Column
@@ -115,10 +116,10 @@ insertIntoCol c@(C p1    p2    p3    p4    p5    Empty) p' = Just $ C p1 p2 p3 p
 insertIntoCol c _ = Nothing -- Column is full
 
 
-insert :: Board -> Piece -> Int -> Maybe Board
-insert b p i = do
+insert :: Board -> Color -> Int -> Maybe Board
+insert b color i = do
   c <- getCol b i
-  c' <- insertIntoCol c p
+  c' <- insertIntoCol c (NonEmpty color)
   replaceCol b i c'
 
 -- >>> insert emptyBoard (NonEmpty Red) 1
@@ -127,17 +128,17 @@ insert b p i = do
 testInsert :: Maybe Board
 testInsert =
   do
-    t1 <- insert emptyBoard (NonEmpty Red)    1
-    t2 <- insert t1         (NonEmpty Yellow) 1
-    t3 <- insert t2         (NonEmpty Yellow) 1
-    insert t3               (NonEmpty Red)    1
+    t1 <- insert emptyBoard Red    1
+    t2 <- insert t1         Yellow 1
+    t3 <- insert t2         Red 1
+    insert t3               Yellow    1
 
 -- >>> testInsert
 -- Just (B (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow) (NonEmpty Red) Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty))
 
 -- | convert a board to a list of columns
 boardToList :: Board -> [Column]
-boardToList (B c1 c2 c3 c4 c5 c6 c7) = [c1, c2, c3, c4, c5, c6, c7]
+boardToList (B c c1 c2 c3 c4 c5 c6 c7) = [c1, c2, c3, c4, c5, c6, c7]
 
 -- | convert a column to a list of pieces
 columnToList :: Column -> [Piece]
@@ -145,7 +146,7 @@ columnToList (C p1 p2 p3 p4 p5 p6) = [p1, p2, p3, p4, p5, p6]
 
 -- | represent a board as a list of pieces, where each list is a column
 columns :: Board -> [[Piece]]
-columns (B c1 c2 c3 c4 c5 c6 c7) =
+columns (B c c1 c2 c3 c4 c5 c6 c7) =
   [columnToList c1, columnToList c2, columnToList c3, columnToList c4, columnToList c5, columnToList c6, columnToList c7]
 
 -- | represent a board as a list of pieces, where each list is a row
@@ -206,7 +207,7 @@ checkWinCondition b c =
       else Nothing
 
 winColBoard :: Board
-winColBoard = B c1 c2 c3 c4 c5 c6 c7
+winColBoard = B Yellow c1 c2 c3 c4 c5 c6 c7
   where
     c1 = emptyCol
     c2 = emptyCol
@@ -217,7 +218,7 @@ winColBoard = B c1 c2 c3 c4 c5 c6 c7
     c7 = emptyCol
 
 winRowBoard :: Board
-winRowBoard = B c1 c2 c3 c4 c5 c6 c7
+winRowBoard = B Red c1 c2 c3 c4 c5 c6 c7
   where
     c1 = C (NonEmpty Red) Empty Empty Empty Empty Empty
     c2 = C (NonEmpty Red) Empty Empty Empty Empty Empty
@@ -228,7 +229,7 @@ winRowBoard = B c1 c2 c3 c4 c5 c6 c7
     c7 = C (NonEmpty Yellow) Empty Empty Empty Empty Empty
 
 winDiagonalBoard :: Board
-winDiagonalBoard = B c1 c2 c3 c4 c5 c6 c7
+winDiagonalBoard = B Yellow c1 c2 c3 c4 c5 c6 c7
   where
     c1 = emptyCol
     c2 = emptyCol
@@ -239,7 +240,7 @@ winDiagonalBoard = B c1 c2 c3 c4 c5 c6 c7
     c7 = emptyCol
 
 winAntiDiagonalBoard :: Board
-winAntiDiagonalBoard = B c1 c2 c3 c4 c5 c6 c7
+winAntiDiagonalBoard = B Red c1 c2 c3 c4 c5 c6 c7
   where
     c1 = emptyCol
     c2 = emptyCol
@@ -250,7 +251,7 @@ winAntiDiagonalBoard = B c1 c2 c3 c4 c5 c6 c7
     c7 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) Empty Empty
 
 exampleBoard1 :: Board
-exampleBoard1 = B c1 c2 c3 c4 c5 c6 c7
+exampleBoard1 = B Red c1 c2 c3 c4 c5 c6 c7
   where
     c1 = emptyCol
     c2 = emptyCol
@@ -261,7 +262,7 @@ exampleBoard1 = B c1 c2 c3 c4 c5 c6 c7
     c7 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) Empty Empty
 
 exampleBoard2 :: Board
-exampleBoard2 = B c1 c2 c3 c4 c5 c6 c7
+exampleBoard2 = B Red c1 c2 c3 c4 c5 c6 c7
   where
     c1 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
     c2 = emptyCol
@@ -276,9 +277,9 @@ test_insert =
   "insert tests"
     ~: TestList
       [
-        insert emptyBoard (NonEmpty Red) 1 ~?= Just (B (C (NonEmpty Red) Empty Empty Empty Empty Empty) emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol),
-        testInsert ~?= Just (B (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow) (NonEmpty Red) Empty Empty) emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol),
-        insert exampleBoard2 (NonEmpty Red) 1 ~?= Nothing
+        insert emptyBoard Red 1 ~?= Just (B Yellow (C (NonEmpty Red) Empty Empty Empty Empty Empty) emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol),
+        testInsert ~?= Just (B Red (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty) emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol),
+        insert exampleBoard2 Red 1 ~?= Nothing
       ]
 
 -- >>> runTestTT test_insert
@@ -313,8 +314,8 @@ instance Arbitrary Board where
     numMoves <- QC.choose (0, 10)
     redMoves <- QC.vectorOf numMoves (QC.chooseInt (1, 7))
     yellowMoves <- QC.vectorOf numMoves (QC.chooseInt (1, 7))
-    let redMoves' = map (, NonEmpty Red) redMoves
-        yellowMoves' = map (, NonEmpty Yellow) yellowMoves
+    let redMoves' = map (, Red) redMoves
+        yellowMoves' = map (, Yellow) yellowMoves
     return $ buildBoard $ interleave redMoves' yellowMoves'
 
 interleave :: [a] -> [a] -> [a]
@@ -322,11 +323,11 @@ interleave [] ys = ys
 interleave xs [] = xs
 interleave (x : xs) (y : ys) = x : y : interleave xs ys
 
-buildBoard :: [(Int, Piece)] -> Board
+buildBoard :: [(Int, Color)] -> Board
 buildBoard = foldr f emptyBoard
   where
-    f (i, piece) acc =
-      fromMaybe emptyBoard $ insert acc piece i
+    f (i, color) acc =
+      fromMaybe emptyBoard $ insert acc color i
 
 instance Arbitrary Color where
   arbitrary :: Gen Color
@@ -364,4 +365,23 @@ testValidBoardFilling b =
 
 -- helper function to print the board
 showBoard :: Board -> String
-showBoard = undefined
+showBoard b =
+  let row_ls = reverse $ rows b in
+    let str_ls = "1 2 3 4 5 6 7" : toString row_ls in
+      unlines str_ls
+    where
+      toString ls = do
+        l <- ls
+        return $ do
+          x <- l
+          f x
+      f Empty = ". "
+      f (NonEmpty Red) = "x "
+      f (NonEmpty Yellow) = "o "
+
+-- >>> showBoard emptyBoard
+-- "1 2 3 4 5 6 7\n. . . . . . . \n. . . . . . . \n. . . . . . . \n. . . . . . . \n. . . . . . . \n. . . . . . . \n"
+-- >>> showBoard exampleBoard1
+-- "1 2 3 4 5 6 7\n. . . . . . . \n. . . . . . . \n. . . . . . x \n. . . . o . o \n. . . o x x x \n. . . x o o o \n"
+-- >>> showBoard winAntiDiagonalBoard
+-- "1 2 3 4 5 6 7\n. . . . . . . \n. . . . . . . \n. . . . . . x \n. . . . o x o \n. . . o x x x \n. . . x o o o \n"

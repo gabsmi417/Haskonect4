@@ -1,8 +1,8 @@
 module Minimax where
-import Board (Board, Piece, insert)
+import Board (Board, Color, Piece, insert)
 
 data Move where
-  M :: Piece -> Int -> Move
+  M :: Color -> Int -> Move
 
 optimalMove :: Board -> Move
 optimalMove = undefined
