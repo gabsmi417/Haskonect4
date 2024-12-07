@@ -4,19 +4,17 @@ import Board (
   Color(Red, Yellow),
   Column,
   End(Win, Tie),
+  getColor,
   showBoard,
   checkWinCondition,
   emptyBoard,
   insert
   )
 
-data Game = Game {
-  board :: Board,
-  current :: Color
-} deriving (Eq, Show)
+newtype Game = Game Board deriving (Eq, Show)
 
 initialGame :: Game
-initialGame = Game { board = emptyBoard, current = Red }
+initialGame = Game emptyBoard
 
 class Monad m => Interface m where
   -- ask the current player for their next move
@@ -27,30 +25,26 @@ class Monad m => Interface m where
   playerMessage :: Color -> String -> m ()
 
 makeMove :: Game -> Int -> Maybe Game
-makeMove g i = do
-  b <- insert (board g) (current g) i
-  case current g of
-    Red -> return $ g { board = b, current = Yellow }
-    Yellow -> return $ g { board = b, current = Red}
+makeMove (Game b) i = do
+  b <- insert b i
+  return $ Game b
 
 -- | make moves until someone wins
 playGame :: Interface m => Game -> m ()
-playGame game = do
-  message $ showBoard (board game)
-  let color = current game
+playGame game@(Game b) = do
+  message $ showBoard b
+  let color = getColor b
   playerMessage color "It's your turn."
   move <- getMove
-
   case makeMove game move of
-    Just game' -> do
-      case checkWinCondition (board game') (current game) of
+    Just game'@(Game b') -> do
+      case checkWinCondition b' of
         Just (Win winner) -> message $ "Player " ++ show winner ++ " wins!"
         Just Tie -> message "It's a Tie!"
         Nothing -> playGame game'
     Nothing -> do
       playerMessage color "Invalid move. Please try again."
       playGame game
-
 
 instance Interface IO where
   getMove :: IO Int
@@ -69,7 +63,7 @@ instance Interface IO where
       Red -> putStr "Red: " 
       Yellow -> putStr "Yellow: "
     putStrLn msg
-  
+
   message :: String -> IO ()
   message = putStrLn
 
