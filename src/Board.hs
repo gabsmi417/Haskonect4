@@ -159,9 +159,6 @@ insert b i = do
   c' <- insertIntoCol c (NonEmpty (getColor b))
   replaceCol b i c'
 
--- >>> insert emptyBoard (NonEmpty Red) 1
--- Just (B (C (NonEmpty Red) Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty))
-
 testInsert :: Maybe Board
 testInsert =
   do
@@ -169,9 +166,6 @@ testInsert =
     t2 <- insert t1         1
     t3 <- insert t2         1
     insert t3               1
-
--- >>> testInsert
--- Just (B (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow) (NonEmpty Red) Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty))
 
 -- | convert a board to a list of columns
 allRowsToList :: Rows -> [Column]
@@ -227,15 +221,6 @@ checkDiagonal b c (i, j) =
 checkAntiDiagonal :: [[Piece]] -> Color -> (Int, Int) -> Bool
 checkAntiDiagonal b c (i, j) =
   all (== Just c) [getPiece b (i - k) (j + k) | k <- [0..3]]
-
--- >>> checkAntiDiagonal (reverse $ rows r') Yellow (3, 3)
--- True
-
--- >>> [getPiece (reverse $ rows r') (3 - k) (3 + k) | k <- [0..3]]
--- [Just Yellow,Just Yellow,Just Yellow,Just Yellow]
-
--- >>> getPiece (reverse $ rows r') 0 6
--- Just Yellow
 
 checkDiagonals :: Rows -> Color -> ([[Piece]] -> Color -> (Int, Int) -> Bool) -> Bool
 checkDiagonals r c f =
@@ -334,8 +319,7 @@ exampleBoard2 = Board $ By $ R c1 c2 c3 c4 c5 c6 c7
     c7 = emptyCol
 
 exampleBoard3 :: Board
-exampleBoard3 = Board $ Br $ r'
-r' = R c1 c2 c3 c4 c5 c6 c7
+exampleBoard3 = Board $ Br $ R c1 c2 c3 c4 c5 c6 c7
   where
     c1 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
     c2 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
@@ -344,11 +328,6 @@ r' = R c1 c2 c3 c4 c5 c6 c7
     c5 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
     c6 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
     c7 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty
-
--- >>> checkDiagonals r' Yellow checkAntiDiagonal
--- False
-
--- checkRows r c|| checkColumns r c || checkDiagonals r c checkDiagonal || checkDiagonals r c checkAntiDiagonal in
 
 test_insert :: Test
 test_insert =
@@ -359,9 +338,6 @@ test_insert =
         testInsert ~?= Just (Board $ Br $ R (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty) emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol),
         insert exampleBoard2 1 ~?= Nothing
       ]
-
--- >>> runTestTT test_insert
--- Counts {cases = 3, tried = 3, errors = 0, failures = 0}
 
 test_win_conditions :: Test
 test_win_conditions =
@@ -377,9 +353,6 @@ test_win_conditions =
         checkWinCondition emptyBoard ~?= Nothing,
         checkWinCondition exampleBoard1 ~?= Nothing
       ]
-
--- >>> runTestTT test_win_conditions
--- Counts {cases = 8, tried = 8, errors = 0, failures = 0}
 
 -- Unit tests to add
 -- check to see if inserting into full results in nothing
@@ -404,15 +377,23 @@ instance Arbitrary Color where
   arbitrary = elements [Red, Yellow]
 
 count :: Color -> Board -> Int
-count c b = undefined
+count c (Board (Br r)) = countHelper c r
+count c (Board (By r)) = countHelper c r
+
+countHelper :: Color -> Rows -> Int
+countHelper c (R c1 c2 c3 c4 c5 c6 c7) =
+  foldr f 0 [c1, c2, c3, c4, c5, c6, c7]
+  where
+    f col acc =
+      acc + length (filter (== NonEmpty c) (columnToList col))
 
 simulateGame :: [Int] -> [Int] -> Board -> Maybe Board
 simulateGame redMoves yellowMoves b = undefined
 
 -- check to see if numRed == numYellow || numRed == numYellow + 1 after simulate game (asuming not nothing)
 
-testColorBalance :: Board -> Bool
-testColorBalance b =
+prop_color_balance :: Board -> Bool
+prop_color_balance b =
   let r = count Red b
       y = count Yellow b in
     r == y || r == y + 1
@@ -429,8 +410,8 @@ testValidColumn c@(C (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmp
 testValidColumn c@(C (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _) (NonEmpty _)) = True
 testValidColumn _ = False
 
-testValidBoardFilling :: Board -> Bool
-testValidBoardFilling b =
+prop_valid_board_filling :: Board -> Bool
+prop_valid_board_filling b =
   foldr (\c acc -> testValidColumn c && acc) True (allRowsToList $ getRows b)
 
 -- helper function to print the board
@@ -452,12 +433,15 @@ showBoardHelper r =
       f (NonEmpty Red) = "x "
       f (NonEmpty Yellow) = "o "
 
--- >>> showBoard emptyBoard
--- "1 2 3 4 5 6 7\n. . . . . . . \n. . . . . . . \n. . . . . . . \n. . . . . . . \n. . . . . . . \n. . . . . . . \n"
--- >>> showBoard exampleBoard1
--- "1 2 3 4 5 6 7\n. . . . . . . \n. . . . . . . \n. . . . . . x \n. . . . o . o \n. . . o x x x \n. . . x o o o \n"
--- >>> showBoard winAntiDiagonalBoard
--- "1 2 3 4 5 6 7\n. . . . . . . \n. . . . . . . \n. . . . . . x \n. . . . o x o \n. . . o x x x \n. . . x o o o \n"
+-- >>>  test_all
+-- Counts {cases = 11, tried = 11, errors = 0, failures = 0}
 
--- >>>  showBoard tiedBoard
--- "1 2 3 4 5 6 7\nx x o x o o x \no o x o x x o \nx x x o o o x \no o x o o x o \nx x o x x x o \no x x o o x o \n"
+test_all :: IO Counts
+test_all = runTestTT $ TestList [test_insert, test_win_conditions]
+
+qc :: IO ()
+qc = do
+  putStrLn "color_balance"
+  QC.quickCheck prop_color_balance
+  putStrLn "valid_board_filling"
+  QC.quickCheck prop_valid_board_filling
