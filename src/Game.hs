@@ -29,22 +29,20 @@ makeMove (Game b) i = do
   b <- insert b i
   return $ Game b
 
--- | make moves until someone wins
 playGame :: Interface m => Game -> m ()
 playGame game@(Game b) = do
-  message $ showBoard b
-  let color = getColor b
-  playerMessage color "It's your turn."
-  move <- getMove
-  case makeMove game move of
-    Just game'@(Game b') -> do
-      case checkWinCondition b' of
-        Just (Win winner) -> message $ "Player " ++ show winner ++ " wins!"
-        Just Tie -> message "It's a Tie!"
-        Nothing -> playGame game'
-    Nothing -> do
-      playerMessage color "Invalid move. Please try again."
-      playGame game
+  playerMessage (getColor b) ("\n" ++ showBoard b)
+  case checkWinCondition b of
+    Just (Win p)  -> message $ "Player " ++ show p ++ " wins!"
+    Just Tie      -> message "It's a Tie!"
+    Nothing       -> do
+      playerMessage (getColor b) "It's your turn" 
+      move <- getMove
+      case makeMove game move of
+        Just game' -> playGame game'
+        Nothing    -> do
+          playerMessage (getColor b) "Invalid move. Please try again."
+          playGame game
 
 instance Interface IO where
   getMove :: IO Int

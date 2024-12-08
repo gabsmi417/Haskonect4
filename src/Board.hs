@@ -128,18 +128,20 @@ getCol b i = getColHelper (getRows b) i
 
 -- Flips the color
 replaceCol :: Board -> Int -> Column -> Maybe Board
-replaceCol b i c' = Just $ Board (By (replaceColHelper (getRows b) i c'))
-  where
-    replaceColHelper r@(R c1 c2 c3 c4 c5 c6 c7) i c' = 
-      case i of
-        1 -> R c' c2 c3 c4 c5 c6 c7
-        2 -> R c1 c' c3 c4 c5 c6 c7
-        3 -> R c1 c2 c' c4 c5 c6 c7
-        4 -> R c1 c2 c3 c' c5 c6 c7
-        5 -> R c1 c2 c3 c4 c' c6 c7
-        6 -> R c1 c2 c3 c4 c5 c' c7
-        7 -> R c1 c2 c3 c4 c5 c6 c'
-        _ -> r
+replaceCol (Board (Br r)) i c' = Just $ Board (By (replaceColHelper r i c'))
+replaceCol (Board (By r)) i c' = Just $ Board (Br (replaceColHelper r i c'))
+
+replaceColHelper :: (Eq a, Num a) => Rows -> a -> Column -> Rows
+replaceColHelper r@(R c1 c2 c3 c4 c5 c6 c7) i c' = 
+  case i of
+    1 -> R c' c2 c3 c4 c5 c6 c7
+    2 -> R c1 c' c3 c4 c5 c6 c7
+    3 -> R c1 c2 c' c4 c5 c6 c7
+    4 -> R c1 c2 c3 c' c5 c6 c7
+    5 -> R c1 c2 c3 c4 c' c6 c7
+    6 -> R c1 c2 c3 c4 c5 c' c7
+    7 -> R c1 c2 c3 c4 c5 c6 c'
+    _ -> r
 
 insertIntoCol :: Column -> Piece -> Maybe Column
 insertIntoCol c@(C Empty p2    p3    p4    p5    p6   ) p' = Just $ C p' p2 p3 p4 p5 p6
@@ -213,7 +215,7 @@ getPiece b i j = do
 -- | get the nth index of a list, returns Nothing if out of bounds
 (!?) :: [a] -> Int -> Maybe a
 ls !? n
-  | n < 0 = Nothing
+  | n <= 0 = Nothing
   | otherwise = case drop (n - 1) ls of
       (y:_) -> Just y
       _ -> Nothing
@@ -226,9 +228,18 @@ checkAntiDiagonal :: [[Piece]] -> Color -> (Int, Int) -> Bool
 checkAntiDiagonal b c (i, j) =
   all (== Just c) [getPiece b (i - k) (j + k) | k <- [0..3]]
 
+-- >>> checkAntiDiagonal (reverse $ rows r') Yellow (3, 3)
+-- True
+
+-- >>> [getPiece (reverse $ rows r') (3 - k) (3 + k) | k <- [0..3]]
+-- [Just Yellow,Just Yellow,Just Yellow,Just Yellow]
+
+-- >>> getPiece (reverse $ rows r') 0 6
+-- Just Yellow
+
 checkDiagonals :: Rows -> Color -> ([[Piece]] -> Color -> (Int, Int) -> Bool) -> Bool
 checkDiagonals r c f =
-  any (f (rows r) c) [(i, j) | i <- [1..numRows], j <- [1..numCols]]
+  any (f (reverse $ rows r) c) [(i, j) | i <- [1..numRows], j <- [1..numCols]]
 
 checkTie :: Rows -> Bool
 checkTie r = Empty `notElem` concatMap columnToList (allRowsToList r)
@@ -322,6 +333,23 @@ exampleBoard2 = Board $ By $ R c1 c2 c3 c4 c5 c6 c7
     c6 = emptyCol
     c7 = emptyCol
 
+exampleBoard3 :: Board
+exampleBoard3 = Board $ Br $ r'
+r' = R c1 c2 c3 c4 c5 c6 c7
+  where
+    c1 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
+    c2 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
+    c3 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
+    c4 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red)
+    c5 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
+    c6 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
+    c7 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty
+
+-- >>> checkDiagonals r' Yellow checkAntiDiagonal
+-- False
+
+-- checkRows r c|| checkColumns r c || checkDiagonals r c checkDiagonal || checkDiagonals r c checkAntiDiagonal in
+
 test_insert :: Test
 test_insert =
   "insert tests"
@@ -341,19 +369,17 @@ test_win_conditions =
     ~: TestList
       [
         checkWinCondition winColBoard ~?= Just (Win Yellow),
-        checkWinCondition winColBoard ~?= Nothing,
         checkWinCondition winRowBoard ~?= Just (Win Red),
         checkWinCondition winDiagonalBoard ~?= Just (Win Yellow),
-        checkWinCondition winDiagonalBoard ~?= Nothing,
         checkWinCondition winAntiDiagonalBoard ~?= Just (Win Red),
         checkWinCondition tiedBoard ~?= Just Tie,
-        checkWinCondition tiedBoard ~?= Just Tie,
+        checkWinCondition exampleBoard3 ~?= Nothing,
         checkWinCondition emptyBoard ~?= Nothing,
         checkWinCondition exampleBoard1 ~?= Nothing
       ]
 
 -- >>> runTestTT test_win_conditions
--- Counts {cases = 10, tried = 10, errors = 0, failures = 2}
+-- Counts {cases = 8, tried = 8, errors = 0, failures = 0}
 
 -- Unit tests to add
 -- check to see if inserting into full results in nothing
@@ -434,4 +460,4 @@ showBoardHelper r =
 -- "1 2 3 4 5 6 7\n. . . . . . . \n. . . . . . . \n. . . . . . x \n. . . . o x o \n. . . o x x x \n. . . x o o o \n"
 
 -- >>>  showBoard tiedBoard
--- "1 2 3 4 5 6 7\nx o x o x o x \no x o x o x o \nx o x o x o x \no x o x o x o \nx o x o x o x \no x o x o x o \n"
+-- "1 2 3 4 5 6 7\nx x o x o o x \no o x o x x o \nx x x o o o x \no o x o o x o \nx x o x x x o \no x x o o x o \n"
