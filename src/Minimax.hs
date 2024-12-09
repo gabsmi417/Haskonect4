@@ -1,5 +1,5 @@
 module Minimax where
-import Board (Board, Color (Red, Yellow), Piece, insert, emptyBoard, getColor)
+import Board (Board, Color (Red, Yellow), Piece, insert, emptyBoard, getColor, checkWinCondition, End (Win))
 
 data Move where
   M :: Int -> Move
@@ -11,7 +11,7 @@ isLegalMove :: Board -> Move -> Bool
 isLegalMove = undefined
 
 optimalMove :: Board -> Maybe Move
-optimalMove b = snd $ boundedMinMax b 7
+optimalMove b = snd $ boundedMinMax b 5
 
 -- TODO: Could refactor this with State Monad
 boundedMinMax :: Board -> Int -> (Int, Maybe Move)
@@ -49,9 +49,14 @@ checkIfFirstGreater e1 e2 e3 e4 e5 e6 e7 =
 -- Assume evalBoard returns a value between -100, 100 where
 --    100 is winning for P1 (Red) and -100 is winning for P2 (Yellow)
 evalBoard :: Board -> Int
-evalBoard b = 0
+evalBoard b = 
+  case checkWinCondition b of
+    Just (Win Yellow) -> -100
+    Just (Win Red) -> 100
+    _ -> 0
 
 -- >>> optimalMove emptyBoard
+-- Just (M 7)
 
 
 -- Quick Check 
