@@ -10,10 +10,13 @@ module Board (
   Piece,
   End(Win, Tie),
   getColor,
+  getRows,
   emptyBoard,
   insert,
   showBoard,
-  checkWinCondition
+  checkWinCondition,
+  allRowsToList,
+  lastTwoAreThreats
 ) where
 import Data.List (transpose)
 import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
@@ -27,7 +30,7 @@ import Test.QuickCheck
     chooseInt
   )
 import qualified Test.QuickCheck as QC
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, isJust, fromJust)
 
 -- Basic Board definition without Gadts
 
@@ -78,7 +81,7 @@ deriving instance Show (ColoredBoard c)
 deriving instance Eq (ColoredBoard c)
 
 deriving instance Show Board
-instance Eq Board where 
+instance Eq Board where
   (==) :: Board -> Board -> Bool
   Board (By r1) == Board (By r2) = r1 == r2
   Board (Br r1) == Board (Br r2) = r1 == r2
@@ -110,8 +113,6 @@ isColFull b i =
     Just (C _ _ _ _ _ (NonEmpty _)) -> True
     _ -> False
 
--- have a validity check - combine col and color
-
 getCol :: Board -> Int -> Maybe Column
 getCol b i = getColHelper (getRows b) i
   where
@@ -132,7 +133,7 @@ replaceCol (Board (Br r)) i c' = Just $ Board (By (replaceColHelper r i c'))
 replaceCol (Board (By r)) i c' = Just $ Board (Br (replaceColHelper r i c'))
 
 replaceColHelper :: (Eq a, Num a) => Rows -> a -> Column -> Rows
-replaceColHelper r@(R c1 c2 c3 c4 c5 c6 c7) i c' = 
+replaceColHelper r@(R c1 c2 c3 c4 c5 c6 c7) i c' =
   case i of
     1 -> R c' c2 c3 c4 c5 c6 c7
     2 -> R c1 c' c3 c4 c5 c6 c7
@@ -152,7 +153,6 @@ insertIntoCol c@(C p1    p2    p3    p4    Empty p6   ) p' = Just $ C p1 p2 p3 p
 insertIntoCol c@(C p1    p2    p3    p4    p5    Empty) p' = Just $ C p1 p2 p3 p4 p5 p'
 insertIntoCol c _ = Nothing -- Column is full
 
-
 insert :: Board -> Int -> Maybe Board
 insert b i = do
   c <- getCol b i
@@ -167,6 +167,14 @@ testInsert =
     t3 <- insert t2         1
     insert t3               1
 
+-- HELPER FUNCTIONS FOR HURISITCS
+
+lastTwoAreThreats :: Column -> Bool
+lastTwoAreThreats col@(C (NonEmpty c) (NonEmpty c') Empty Empty Empty Empty) | c == c' = True
+lastTwoAreThreats col@(C _ (NonEmpty c) (NonEmpty c') Empty Empty Empty) | c == c' = True
+lastTwoAreThreats col@(C _ _ (NonEmpty c) (NonEmpty c') Empty Empty) | c == c' = True
+lastTwoAreThreats _ = False
+
 -- | convert a board to a list of columns
 allRowsToList :: Rows -> [Column]
 allRowsToList (R c1 c2 c3 c4 c5 c6 c7) = [c1, c2, c3, c4, c5, c6, c7]
@@ -177,7 +185,7 @@ columnToList (C p1 p2 p3 p4 p5 p6) = [p1, p2, p3, p4, p5, p6]
 
 -- | represent a board as a list of pieces, where each list is a column
 columns :: Rows -> [[Piece]]
-columns r@(R c1 c2 c3 c4 c5 c6 c7) = 
+columns r@(R c1 c2 c3 c4 c5 c6 c7) =
   [columnToList c1, columnToList c2, columnToList c3, columnToList c4, columnToList c5, columnToList c6, columnToList c7]
 
 -- | represent a board as a list of pieces, where each list is a row
@@ -197,6 +205,8 @@ checkRows r c = any (check4Consecutive c) (rows r)
 checkColumns :: Rows -> Color -> Bool
 checkColumns r c = any (check4Consecutive c) (columns r)
 
+-- maybe use memoization/prefix sum to improve runtime
+
 -- | get the piece at i, j position (1 indexing)
 getPiece :: [[Piece]] -> Int -> Int -> Maybe Color
 getPiece b i j = do
@@ -206,7 +216,7 @@ getPiece b i j = do
     NonEmpty c -> return c
     _ -> Nothing
 
--- | get the nth index of a list, returns Nothing if out of bounds
+-- | get the nth element of a list, returns Nothing if out of bounds
 (!?) :: [a] -> Int -> Maybe a
 ls !? n
   | n <= 0 = Nothing
@@ -214,17 +224,17 @@ ls !? n
       (y:_) -> Just y
       _ -> Nothing
 
-checkDiagonal :: [[Piece]] -> Color -> (Int, Int) -> Bool
-checkDiagonal b c (i, j) =
-  all (== Just c) [getPiece b (i + k) (j + k) | k <- [0..3]]
-
 checkAntiDiagonal :: [[Piece]] -> Color -> (Int, Int) -> Bool
 checkAntiDiagonal b c (i, j) =
+  all (== Just c) [getPiece b (i + k) (j + k) | k <- [0..3]]
+
+checkDiagonal :: [[Piece]] -> Color -> (Int, Int) -> Bool
+checkDiagonal b c (i, j) =
   all (== Just c) [getPiece b (i - k) (j + k) | k <- [0..3]]
 
 checkDiagonals :: Rows -> Color -> ([[Piece]] -> Color -> (Int, Int) -> Bool) -> Bool
 checkDiagonals r c f =
-  any (f (reverse $ rows r) c) [(i, j) | i <- [1..numRows], j <- [1..numCols]]
+  any (f (columns r) c) [(i, j) | i <- [1..numRows], j <- [1..numCols]]
 
 checkTie :: Rows -> Bool
 checkTie r = Empty `notElem` concatMap columnToList (allRowsToList r)
@@ -240,6 +250,25 @@ checkWinConditionHelper r c =
     else
       if checkTie r then Just Tie
       else Nothing
+
+-- helper function to print the board
+showBoard :: Board -> String
+showBoard b =
+  let r = getRows b in
+    let row_ls = reverse $ rows r in
+      let str_ls = "1 2 3 4 5 6 7" : toString row_ls in
+        unlines str_ls
+      where
+        toString ls = do
+          l <- ls
+          return $ do
+            x <- l
+            f x
+        f Empty = ". "
+        f (NonEmpty Red) = "x "
+        f (NonEmpty Yellow) = "o "
+
+{- Test Boards -}
 
 winColBoard :: Board
 winColBoard = Board $ Br $ R c1 c2 c3 c4 c5 c6 c7
@@ -329,6 +358,8 @@ exampleBoard3 = Board $ Br $ R c1 c2 c3 c4 c5 c6 c7
     c6 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
     c7 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty
 
+{- Unit Tests -}
+
 test_insert :: Test
 test_insert =
   "insert tests"
@@ -358,7 +389,8 @@ test_win_conditions =
 -- check to see if inserting into full results in nothing
 -- check to see if inersting into non-full results in something
 
--- Quick Check Test Cases
+{- Quick Check Tests -}
+
 instance Arbitrary Board where
   arbitrary :: Gen Board
   arbitrary = do
@@ -387,9 +419,6 @@ countHelper c (R c1 c2 c3 c4 c5 c6 c7) =
     f col acc =
       acc + length (filter (== NonEmpty c) (columnToList col))
 
-simulateGame :: [Int] -> [Int] -> Board -> Maybe Board
-simulateGame redMoves yellowMoves b = undefined
-
 -- check to see if numRed == numYellow || numRed == numYellow + 1 after simulate game (asuming not nothing)
 
 prop_color_balance :: Board -> Bool
@@ -414,24 +443,12 @@ prop_valid_board_filling :: Board -> Bool
 prop_valid_board_filling b =
   foldr (\c acc -> testValidColumn c && acc) True (allRowsToList $ getRows b)
 
--- helper function to print the board
-showBoard :: Board -> String
-showBoard b = showBoardHelper (getRows b)
-
-showBoardHelper :: Rows -> String
-showBoardHelper r =
-  let row_ls = reverse $ rows r in
-    let str_ls = "1 2 3 4 5 6 7" : toString row_ls in
-      unlines str_ls
-    where
-      toString ls = do
-        l <- ls
-        return $ do
-          x <- l
-          f x
-      f Empty = ". "
-      f (NonEmpty Red) = "x "
-      f (NonEmpty Yellow) = "o "
+-- add insert get color returns the other color
+prop_insert_flips_color :: Board -> Property
+prop_insert_flips_color b =
+  QC.forAll (QC.choose (1, numCols)) $ \i ->
+    isJust (insert b i) QC.==>
+    getColor b /= getColor (fromJust $ insert b i)
 
 -- >>>  test_all
 -- Counts {cases = 11, tried = 11, errors = 0, failures = 0}
@@ -445,3 +462,5 @@ qc = do
   QC.quickCheck prop_color_balance
   putStrLn "valid_board_filling"
   QC.quickCheck prop_valid_board_filling
+  putStrLn "insert flips color"
+  QC.quickCheck prop_insert_flips_color
