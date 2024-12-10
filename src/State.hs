@@ -1,28 +1,3 @@
-{-
----
-fulltitle: A Generic State Transformer
-date: October 28, 2024
----
-
-This file goes with [`StateMonad`](StateMonad.html). Make sure that you start
-with that module first.
-
-Since state is a handy thing to have, the Haskell standard library includes a
-[module][1] `Control.Monad.State` that defines a generic version of the
-state-transformer that we saw in the [`StateMonad`](StateMonad.html).
-This file is a simplified version of that library.
-
-This module defines an *abstract* type, `State` that can only be used according
-to its interface. Clients are prevented from knowing the implementation of
-the `State` type --- this implmentation is private to this module.
-
-To make this type abstract, the module definition includes an explicit export list.
-As a result, only the types and functions listed below will be visible to clients
-of the module.  Furthermore, the type `State` is exported without its data constructor
-`S`. That means that clients of this module cannot use `S`, not even for pattern
-matching.
--}
-
 module State (State, get, put, modify, runState, evalState, execState) where
 
 import Control.Monad (ap, liftM)

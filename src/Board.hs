@@ -205,8 +205,6 @@ checkRows r c = any (check4Consecutive c) (rows r)
 checkColumns :: Rows -> Color -> Bool
 checkColumns r c = any (check4Consecutive c) (columns r)
 
--- maybe use memoization/prefix sum to improve runtime
-
 -- | get the piece at i, j position (1 indexing)
 getPiece :: [[Piece]] -> Int -> Int -> Maybe Color
 getPiece b i j = do
