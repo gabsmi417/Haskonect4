@@ -12,11 +12,16 @@ module Board (
   getColor,
   getRows,
   emptyBoard,
+  exampleBoard30,
+  exampleBoardFail,
   insert,
   showBoard,
   checkWinCondition,
   allRowsToList,
-  lastTwoAreThreats
+  lastTwoAreThreats,
+  getWinningPositions,
+  test_all,
+  qc
 ) where
 import Data.List (transpose, elemIndex)
 import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
@@ -55,8 +60,53 @@ but it does allow for nicer inserts
 data Column where
   C :: Piece -> Piece -> Piece -> Piece -> Piece -> Piece -> Column
 
+-- | contains all columns
 data Rows where
   R :: Column -> Column -> Column -> Column -> Column -> Column -> Column -> Rows
+
+{-
+  This used to be our board:
+  data Board where
+  B :: Color -> Column -> Column -> Column -> Column -> Column -> Column -> Column -> Board
+
+  insert:
+  insert :: Board -> Color -> Int -> Maybe Board
+  insert b color i = do
+    c <- getCol b i
+    c' <- insertIntoCol c (NonEmpty color)
+    replaceCol b i c'
+
+  arbitrary:
+  instance Arbitrary Board where
+  arbitrary :: Gen Board
+  arbitrary = do
+    numMoves <- QC.choose (0, 10)
+    redMoves <- QC.vectorOf numMoves (QC.chooseInt (1, 7))
+    yellowMoves <- QC.vectorOf numMoves (QC.chooseInt (1, 7))
+    let redMoves' = map (, Red) redMoves
+        yellowMoves' = map (, Yellow) yellowMoves
+    return $ buildBoard $ interleave redMoves' yellowMoves'
+
+  interleave :: [a] -> [a] -> [a]
+  interleave [] ys = ys
+  interleave xs [] = xs
+  interleave (x : xs) (y : ys) = x : y : interleave xs ys
+
+  buildBoard :: [(Int, Piece)] -> Board
+  buildBoard :: [(Int, Color)] -> Board
+  buildBoard = foldr f emptyBoard
+    where
+      f (i, color) acc =
+        fromMaybe emptyBoard $ insert acc color i
+  
+  makeMove from Game.hs
+  makeMove :: Game -> Int -> Maybe Game
+  makeMove g i = do
+    b <- insert (board g) (current g) i
+    case current g of
+      Red -> return $ g { board = b, current = Yellow }
+      Yellow -> return $ g { board = b, current = Red}
+-}
 
 data Board where
   Board :: ColoredBoard c -> Board
@@ -99,6 +149,7 @@ emptyCol = C Empty Empty Empty Empty Empty Empty
 emptyBoard :: Board
 emptyBoard = Board (Br (R emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol emptyCol))
 
+-- | get the color of the current board
 getColor :: Board -> Color
 getColor (Board (Br r)) = Red
 getColor (Board (By r)) = Yellow
@@ -145,6 +196,7 @@ replaceColHelper r@(R c1 c2 c3 c4 c5 c6 c7) i c' =
     7 -> R c1 c2 c3 c4 c5 c6 c'
     _ -> r
 
+-- | inserting a piece into a specific column
 insertIntoCol :: Column -> Piece -> Maybe Column
 insertIntoCol c@(C Empty p2    p3    p4    p5    p6   ) p' = Just $ C p' p2 p3 p4 p5 p6
 insertIntoCol c@(C p1    Empty p3    p4    p5    p6   ) p' = Just $ C p1 p' p3 p4 p5 p6
@@ -154,27 +206,21 @@ insertIntoCol c@(C p1    p2    p3    p4    Empty p6   ) p' = Just $ C p1 p2 p3 p
 insertIntoCol c@(C p1    p2    p3    p4    p5    Empty) p' = Just $ C p1 p2 p3 p4 p5 p'
 insertIntoCol c _ = Nothing -- Column is full
 
+-- | inserts a piece into a given column
 insert :: Board -> Int -> Maybe Board
 insert b i = do
   c <- getCol b i
   c' <- insertIntoCol c (NonEmpty (getColor b))
   replaceCol b i c'
 
-testInsert :: Maybe Board
-testInsert =
-  do
-    t1 <- insert emptyBoard 1
-    t2 <- insert t1         1
-    t3 <- insert t2         1
-    insert t3               1
-
--- HELPER FUNCTIONS FOR HURISITCS
-
+-- HELPER FUNCTIONS FOR HEURISITCS
 lastTwoAreThreats :: Column -> Bool
 lastTwoAreThreats col@(C (NonEmpty c) (NonEmpty c') Empty Empty Empty Empty) | c == c' = True
 lastTwoAreThreats col@(C _ (NonEmpty c) (NonEmpty c') Empty Empty Empty) | c == c' = True
 lastTwoAreThreats col@(C _ _ (NonEmpty c) (NonEmpty c') Empty Empty) | c == c' = True
 lastTwoAreThreats _ = False
+
+{- Checking win conditions -}
 
 -- | convert a board to a list of columns
 allRowsToList :: Rows -> [Column]
@@ -200,9 +246,11 @@ check4Consecutive c (x1:x2:x3:x4:xs)
   | otherwise = check4Consecutive c (x2:x3:x4:xs)
 check4Consecutive _ _ = False
 
+-- | checks if there's a win for the given color in any of the rows
 checkRows :: Rows -> Color -> Bool
 checkRows r c = any (check4Consecutive c) (rows r)
 
+-- | checks if there's a win for the given color in any of the columns
 checkColumns :: Rows -> Color -> Bool
 checkColumns r c = any (check4Consecutive c) (columns r)
 
@@ -223,21 +271,26 @@ ls !? n
       (y:_) -> Just y
       _ -> Nothing
 
+-- | checks if there's a win for the given color in any of the antidiagonals
 checkAntiDiagonal :: [[Piece]] -> Color -> (Int, Int) -> Bool
 checkAntiDiagonal b c (i, j) =
   all (== Just c) [getPiece b (i + k) (j + k) | k <- [0..3]]
 
+-- | checks if there's a win for the given color in any of the diagonals
 checkDiagonal :: [[Piece]] -> Color -> (Int, Int) -> Bool
 checkDiagonal b c (i, j) =
   all (== Just c) [getPiece b (i - k) (j + k) | k <- [0..3]]
 
+-- | checks diagonal/antidiagonal depending on the function passed in
 checkDiagonals :: Rows -> Color -> ([[Piece]] -> Color -> (Int, Int) -> Bool) -> Bool
 checkDiagonals r c f =
   any (f (columns r) c) [(i, j) | i <- [1..numRows], j <- [1..numCols]]
 
+-- | checks if the current board is tied
 checkTie :: Rows -> Bool
 checkTie r = Empty `notElem` concatMap columnToList (allRowsToList r)
 
+-- | checks if the opposite color is winning
 checkWinCondition :: Board -> Maybe End
 checkWinCondition (Board (Br r)) = checkWinConditionHelper r Yellow
 checkWinCondition (Board (By r)) = checkWinConditionHelper r Red
@@ -249,6 +302,8 @@ checkWinConditionHelper r c =
     else
       if checkTie r then Just Tie
       else Nothing
+
+{- Get positions such that if a move with that color is played, the color wins -}
 
 getWinningColumnPositions :: Rows -> Color -> [(Int, Int, Color)]
 getWinningColumnPositions r color =
@@ -263,9 +318,6 @@ getWinningColumnPositions r color =
         | c1 == color && c2 == color && c3 == color = (1, j, color) : acc
       f _ acc = acc
 
--- >>> getWinningPositions almostWinColumnBoard
--- [(3,1,Red),(2,3,Yellow),(3,2,Yellow)]
-
 getWinningRowPositions :: Rows -> Color -> [(Int, Int, Color)]
 getWinningRowPositions r color =
   foldr f [] (zip (reverse $ rows r) [1..6])
@@ -279,12 +331,7 @@ getWinningRowPositions r color =
         length left + length right == 3
       ]
 
--- >>> getWinningPositions almostWinRowBoard
--- [(6,2,Red),(5,4,Red),(2,3,Yellow)]
-
--- >>> getWinningRowPositions (getRows almostWinRowBoard) Red
--- [(6,2,Red),(5,4,Red)]
-
+-- | generates a list of diagonals, where each diagonal is a list of coordinates
 diagonals :: [[(Int, Int)]]
 diagonals =
   [
@@ -297,6 +344,7 @@ diagonals =
     | j <- [2..numCols]
   ]
 
+-- | generates a list of antidiagonals, where each antidiagonal is a list of coordinates
 antiDiagonals :: [[(Int, Int)]]
 antiDiagonals =
   [
@@ -328,14 +376,6 @@ getWinningDiagonalPositions r d color =
                   $ drop (fromJust idx + 1) diagonal,
         length left + length right == 3]
 
--- >>> getWinningPositions almostWinDiagonalBoard
--- [(3,4,Red),(3,4,Yellow)]
-
--- winning positions
-getWinningPositions :: Board -> [(Int, Int, Color)]
-getWinningPositions b =
-  concatMap (getWinningPositionsHelper $ getRows b) [Red, Yellow]
-
 getWinningPositionsHelper :: Rows -> Color -> [(Int, Int, Color)]
 getWinningPositionsHelper r c =
   getWinningColumnPositions r c
@@ -343,7 +383,12 @@ getWinningPositionsHelper r c =
   ++ getWinningDiagonalPositions r diagonals c
   ++ getWinningDiagonalPositions r antiDiagonals c
 
--- helper function to print the board
+-- | returns all winning positions
+getWinningPositions :: Board -> [(Int, Int, Color)]
+getWinningPositions b =
+  concatMap (getWinningPositionsHelper $ getRows b) [Red, Yellow]
+
+-- helper function to pretty print the board
 showBoard :: Board -> String
 showBoard b =
   let r = getRows b in
@@ -450,24 +495,29 @@ exampleBoard3 = Board $ Br $ R c1 c2 c3 c4 c5 c6 c7
     c6 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
     c7 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty
 
+exampleBoard30 :: Board
+exampleBoard30 = Board (Br (R (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty) (C (NonEmpty Red) Empty Empty Empty Empty Empty) (C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow)) (C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red)) (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red)) (C (NonEmpty Red) Empty Empty Empty Empty Empty) (C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow))))
+
+exampleBoardFail :: Board
+exampleBoardFail = Board (Br (R (C (NonEmpty Yellow) Empty Empty Empty Empty Empty) (C (NonEmpty Red) (NonEmpty Red) Empty Empty Empty Empty) (C (NonEmpty Yellow) Empty Empty Empty Empty Empty) (C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty) (C (NonEmpty Red) Empty Empty Empty Empty Empty) (C (NonEmpty Yellow) Empty Empty Empty Empty Empty) (C Empty Empty Empty Empty Empty Empty)))
+
 almostWinColumnBoard :: Board
 almostWinColumnBoard = Board $ By $ R c1 c2 c3 c4 c5 c6 c7
   where
     c1 = C (NonEmpty Red) (NonEmpty Red) (NonEmpty Red) Empty Empty Empty
     c2 = C (NonEmpty Yellow) Empty Empty Empty Empty Empty
     c3 = C (NonEmpty Red) (NonEmpty Yellow)  (NonEmpty Yellow)  (NonEmpty Yellow) Empty Empty
-    c4 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow) (NonEmpty Yellow)
+    c4 = C (NonEmpty Red) Empty Empty Empty Empty Empty
     c5 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
     c6 = C (NonEmpty Red) (NonEmpty Red) Empty Empty Empty Empty
-    c7 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
-
+    c7 = C (NonEmpty Yellow) (NonEmpty Yellow) Empty Empty Empty Empty
 
 almostWinRowBoard :: Board
 almostWinRowBoard = Board $ By $ R c1 c2 c3 c4 c5 c6 c7
   where
     c1 = C (NonEmpty Red) Empty Empty Empty Empty Empty
     c2 = C Empty Empty Empty Empty Empty Empty
-    c3 = C (NonEmpty Red) (NonEmpty Yellow)  (NonEmpty Yellow)  (NonEmpty Yellow) Empty Empty
+    c3 = C (NonEmpty Red) (NonEmpty Yellow)  (NonEmpty Yellow)  Empty Empty Empty
     c4 = C (NonEmpty Red) Empty Empty Empty Empty Empty
     c5 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
     c6 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
@@ -485,6 +535,14 @@ almostWinDiagonalBoard = Board $ By $ R c1 c2 c3 c4 c5 c6 c7
     c7 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
 
 {- Unit Tests -}
+
+testInsert :: Maybe Board
+testInsert =
+  do
+    t1 <- insert emptyBoard 1
+    t2 <- insert t1         1
+    t3 <- insert t2         1
+    insert t3               1
 
 test_insert :: Test
 test_insert =
@@ -511,9 +569,17 @@ test_win_conditions =
         checkWinCondition exampleBoard1 ~?= Nothing
       ]
 
--- Unit tests to add
--- check to see if inserting into full results in nothing
--- check to see if inersting into non-full results in something
+test_winning_positions :: Test
+test_winning_positions =
+  "winning positions tests"
+  ~: TestList
+  [
+    getWinningPositions almostWinColumnBoard ~?= [(3,1,Red),(2,3,Yellow)],
+    getWinningPositions almostWinRowBoard ~?= [(6,2,Red),(5,4,Red)],
+    getWinningPositions almostWinDiagonalBoard ~?= [(3,4,Red),(3,4,Yellow)],
+    getWinningPositions emptyBoard ~?= [],
+    getWinningPositions exampleBoard3 ~?= []
+  ]
 
 {- Quick Check Tests -}
 
@@ -529,10 +595,6 @@ buildBoard = foldr f emptyBoard
   where
     f i acc =
       fromMaybe emptyBoard $ insert acc i
-
-instance Arbitrary Color where
-  arbitrary :: Gen Color
-  arbitrary = elements [Red, Yellow]
 
 count :: Color -> Board -> Int
 count c (Board (Br r)) = countHelper c r
@@ -576,11 +638,35 @@ prop_insert_flips_color b =
     isJust (insert b i) QC.==>
     getColor b /= getColor (fromJust $ insert b i)
 
+prop_insert_same_col_4_times :: Board -> Bool
+prop_insert_same_col_4_times b = fromMaybe True $ do
+  b1 <- insert b 1
+  b1 <- insert b1 2
+  b1 <- insert b1 1
+  b1 <- insert b1 3
+  b1 <- insert b1 1
+  b2 <- insert b1 4
+  b1 <- insert b2 1
+  return $
+    checkWinCondition b1 == Just (Win (getColor b2))
+    -- note checkWinCondition uses opposite color of given board due to IO
+    -- so we want to use the color for b2
+
+prop_insert_3_winning_position_not_empty :: Board -> Bool
+prop_insert_3_winning_position_not_empty b = fromMaybe True $ do
+  b1 <- insert b 1
+  b1 <- insert b1 2
+  b1 <- insert b1 1
+  b1 <- insert b1 3
+  b1 <- insert b1 1
+  return $
+    not (null $ getWinningPositions b1) || isColFull b1 1
+  
 -- >>>  test_all
 -- Counts {cases = 11, tried = 11, errors = 0, failures = 0}
 
 test_all :: IO Counts
-test_all = runTestTT $ TestList [test_insert, test_win_conditions]
+test_all = runTestTT $ TestList [test_insert, test_win_conditions, test_winning_positions]
 
 qc :: IO ()
 qc = do
@@ -588,5 +674,9 @@ qc = do
   QC.quickCheck prop_color_balance
   putStrLn "valid_board_filling"
   QC.quickCheck prop_valid_board_filling
-  putStrLn "insert flips color"
+  putStrLn "insert_flips_color"
   QC.quickCheck prop_insert_flips_color
+  putStrLn "insert_same_col_4_times"
+  QC.quickCheck prop_insert_same_col_4_times
+  putStrLn "insert_3_winning_position_not_empty"
+  QC.quickCheck prop_insert_3_winning_position_not_empty

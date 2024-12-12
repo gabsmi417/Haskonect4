@@ -1,11 +1,13 @@
 import Test.HUnit
 import Test.QuickCheck
 
-import Lib
-
--- >>> someDecl
+import Board qualified as B
+import Minimax qualified as M
 
 main :: IO ()
 main = do 
-    putStrLn someDecl
-    putStrLn "Test suite not yet implemented"
+    putStrLn "*** Testing Board ***"
+    B.test_all
+    B.qc
+    putStrLn "*** Testing Minimax ***"
+    M.qc

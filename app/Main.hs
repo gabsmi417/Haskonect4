@@ -1,10 +1,7 @@
 -- * Entry point for a Haskell application
--- Typically, this file is short and most code is part of a reusable library
 module Main where
 
-import Lib
-
--- >>> someDecl
+import qualified Game as G
 
 main :: IO ()
-main = putStrLn someDecl
+main = G.main

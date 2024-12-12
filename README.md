@@ -1,40 +1,43 @@
 # project-cis5520
-
-This is an "Empty project" for Haskell. It is configured in the same way as
-the lecture demo and homework assignments for CIS 5520, but contains no
-code. Feel free to use this repository for experimentation!
-
-If you want to change the name of this project, look for all occurrences of
-`project-cis5520` in the `project-cis5520.cabal` file and in the `hie.yaml` 
-file. (And change the name of the cabal file to match your new name!)
+Name: Susan Zhang, Gabriel Smith
+PennKeys: szhang25, gabsmi
 
 ## Module organization
-
 Haskell packages typically divide their source code into three separate places:
 
-  - The bulk of your code should be developed as a reusable library in 
-    modules in the `src` directory. We've created [Lib.hs](src/Lib.hs) 
-    for you to get started. You can add additional modules here.
-    If you do add new modules to this directory you should list them
-    in the cabal file: `project-cis5520.cabal`.
+  - src:
+    Read our code in the following order
+    - Board.hs
+      - includes data structures defining the game board, columns,
+        players (colors), win state
+      - has functions such as insert and win condition checks for game play mechanism
+      - has functions for getting positions that if played, allows a player to win;
+        this is for the eval function for the Minimax algorithm
+      - defines many example boards, unit tests, and QuickCheck props
+    - Minimax.hs
+      - where our Negamax algorithm with alpha beta pruning is
+      - defines the evaluation function and heuristics for short-circuiting in the tree search
+      - has helper functions for prop testing, allowing the bot
+        to play with a certain depth/number of steps against itself
+      - defines QuickCheck props
+    - Game.hs
+      - allows the user to pick whether they want to play against someone
+        or our AI bot
+      - this is where the IO is done for our game; gets the moves that the user enter
+        in the command line and either performs the move or outputs an error message
+        if the move is invalid
+      - also prints out the board, messages during gameplay, and winning/losing value
+        outputted by the AI bot if the user chooses to play against the bot
+    * note: State.hs is from lecture so no need to read
   
-  - The entry point for your executable is in [Main.hs](app/Main.hs). 
+  - app/Main.hs: the entry point for our executable 
   
-  - All of your test cases should be in [the test directory](test/Spec.hs).
+  - test/Spec.hs: can run all of our test cases
 
 ## Building, running, and testing
 
 This project compiles with `stack build`. 
-You can run the main executable with `stack run`.
+You can start the game with `stack run`.
 You can run the tests with `stack test`. 
 
 Finally, you can start a REPL with `stack ghci`.
-
-## Importing additional libraries
-
-This project is designed to run with stackage: you can easily use any library
-in https://www.stackage.org/lts-22.32 by adding an entry to the
-`build-depends` list of the `common-stanza` in the cabal file. If you want to
-use a library that is not on stackage, you'll need to update the common-stanza
-*and* add information to `stack.yaml` about where to find that library.
-
