@@ -1,14 +1,18 @@
 module Game where
-import Board (
-  Board,
-  Color(Red, Yellow),
-  Column,
-  End(Win, Tie),
-  getColor,
-  showBoard,
-  checkWinCondition,
-  emptyBoard,
-  insert
+import Board
+  ( Board,
+    Color(Red, Yellow),
+    Column,
+    End(Win, Tie),
+    getColor,
+    showBoard,
+    checkWinCondition,
+    emptyBoard,
+    insert
+  )
+import Minimax
+  ( optimalMove,
+    Move(M),
   )
 
 newtype Game = Game Board deriving (Eq, Show)

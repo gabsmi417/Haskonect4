@@ -18,7 +18,7 @@ module Board (
   allRowsToList,
   lastTwoAreThreats
 ) where
-import Data.List (transpose)
+import Data.List (transpose, elemIndex)
 import Test.HUnit (Counts, Test (..), runTestTT, (~:), (~?=))
 import Test.QuickCheck
   ( Arbitrary (..),
@@ -30,7 +30,7 @@ import Test.QuickCheck
     chooseInt
   )
 import qualified Test.QuickCheck as QC
-import Data.Maybe (fromMaybe, isJust, fromJust)
+import Data.Maybe (fromMaybe, isJust, fromJust, isNothing)
 
 -- Basic Board definition without Gadts
 
@@ -114,18 +114,19 @@ isColFull b i =
     _ -> False
 
 getCol :: Board -> Int -> Maybe Column
-getCol b i = getColHelper (getRows b) i
-  where
-    getColHelper (R c1 c2 c3 c4 c5 c6 c7) i =
-      case i of
-        1 -> Just c1
-        2 -> Just c2
-        3 -> Just c3
-        4 -> Just c4
-        5 -> Just c5
-        6 -> Just c6
-        7 -> Just c7
-        _ -> Nothing
+getCol b = getColHelper (getRows b)
+
+getColHelper :: (Eq a, Num a) => Rows -> a -> Maybe Column
+getColHelper (R c1 c2 c3 c4 c5 c6 c7) i =
+  case i of
+    1 -> Just c1
+    2 -> Just c2
+    3 -> Just c3
+    4 -> Just c4
+    5 -> Just c5
+    6 -> Just c6
+    7 -> Just c7
+    _ -> Nothing
 
 -- Flips the color
 replaceCol :: Board -> Int -> Column -> Maybe Board
@@ -249,6 +250,99 @@ checkWinConditionHelper r c =
       if checkTie r then Just Tie
       else Nothing
 
+getWinningColumnPositions :: Rows -> Color -> [(Int, Int, Color)]
+getWinningColumnPositions r color =
+  let cols = zip (columns r) [1..7] in
+    foldr f [] cols
+    where
+      f ([NonEmpty c1, NonEmpty c2, NonEmpty c3, Empty, _, _], j) acc
+        | c1 == color && c2 == color && c3 == color = (3, j, color) : acc
+      f ([_, NonEmpty c1, NonEmpty c2, NonEmpty c3, Empty, _], j) acc
+        | c1 == color && c2 == color && c3 == color = (2, j, color) : acc
+      f ([_, _, NonEmpty c1, NonEmpty c2, NonEmpty c3, Empty], j) acc
+        | c1 == color && c2 == color && c3 == color = (1, j, color) : acc
+      f _ acc = acc
+
+-- >>> getWinningPositions almostWinColumnBoard
+-- [(3,1,Red),(2,3,Yellow),(3,2,Yellow)]
+
+getWinningRowPositions :: Rows -> Color -> [(Int, Int, Color)]
+getWinningRowPositions r color =
+  foldr f [] (zip (reverse $ rows r) [1..6])
+  where
+    f (row, i) acc = acc ++ findPositions row i
+    findPositions row i =
+      [ (i, j, color)
+      | (j, Empty) <- zip [1..7] row,
+        let left = takeWhile (== NonEmpty color) $ reverse $ take (j - 1) row,
+        let right = takeWhile (== NonEmpty color) $ drop j row,
+        length left + length right == 3
+      ]
+
+-- >>> getWinningPositions almostWinRowBoard
+-- [(6,2,Red),(5,4,Red),(2,3,Yellow)]
+
+-- >>> getWinningRowPositions (getRows almostWinRowBoard) Red
+-- [(6,2,Red),(5,4,Red)]
+
+diagonals :: [[(Int, Int)]]
+diagonals =
+  [
+    [(i + k, k + 1) | k <- [0 .. 5], i + k <= numRows]
+    | i <- [1..numRows]
+  ]
+  ++
+  [
+    [(k + 1, j + k) | k <- [0 .. 5], j + k <= numCols]
+    | j <- [2..numCols]
+  ]
+
+antiDiagonals :: [[(Int, Int)]]
+antiDiagonals =
+  [
+    [(i - k, k + 1) | k <- [0 .. 5], i - k >= 1]
+    | i <- [1..numRows]
+  ]
+  ++
+  [
+    [(numRows - k, j + k) | k <- [0 .. 5], j + k <= numCols]
+    | j <- [2..numCols]
+  ]
+
+getWinningDiagonalPositions :: Rows -> [[(Int, Int)]] -> Color -> [(Int, Int, Color)]
+getWinningDiagonalPositions r d color =
+  concatMap processDiagonal d
+  where
+    processDiagonal diagonal =
+      [(i, j, color) |
+        let pieces = getPiece $ reverse $ rows r,
+        (i, j) <- diagonal,
+        isNothing (pieces i j),
+        let idx = elemIndex (i, j) diagonal,
+        isJust idx,
+        let left
+              = takeWhile (\ (x, y) -> pieces x y == Just color)
+                  $ reverse $ take (fromJust idx) diagonal,
+        let right
+              = takeWhile (\ (x, y) -> pieces x y == Just color)
+                  $ drop (fromJust idx + 1) diagonal,
+        length left + length right == 3]
+
+-- >>> getWinningPositions almostWinDiagonalBoard
+-- [(3,4,Red),(3,4,Yellow)]
+
+-- winning positions
+getWinningPositions :: Board -> [(Int, Int, Color)]
+getWinningPositions b =
+  concatMap (getWinningPositionsHelper $ getRows b) [Red, Yellow]
+
+getWinningPositionsHelper :: Rows -> Color -> [(Int, Int, Color)]
+getWinningPositionsHelper r c =
+  getWinningColumnPositions r c
+  ++ getWinningRowPositions r c
+  ++ getWinningDiagonalPositions r diagonals c
+  ++ getWinningDiagonalPositions r antiDiagonals c
+
 -- helper function to print the board
 showBoard :: Board -> String
 showBoard b =
@@ -355,6 +449,40 @@ exampleBoard3 = Board $ Br $ R c1 c2 c3 c4 c5 c6 c7
     c5 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
     c6 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow)
     c7 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty
+
+almostWinColumnBoard :: Board
+almostWinColumnBoard = Board $ By $ R c1 c2 c3 c4 c5 c6 c7
+  where
+    c1 = C (NonEmpty Red) (NonEmpty Red) (NonEmpty Red) Empty Empty Empty
+    c2 = C (NonEmpty Yellow) Empty Empty Empty Empty Empty
+    c3 = C (NonEmpty Red) (NonEmpty Yellow)  (NonEmpty Yellow)  (NonEmpty Yellow) Empty Empty
+    c4 = C (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) (NonEmpty Yellow) (NonEmpty Yellow)
+    c5 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
+    c6 = C (NonEmpty Red) (NonEmpty Red) Empty Empty Empty Empty
+    c7 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
+
+
+almostWinRowBoard :: Board
+almostWinRowBoard = Board $ By $ R c1 c2 c3 c4 c5 c6 c7
+  where
+    c1 = C (NonEmpty Red) Empty Empty Empty Empty Empty
+    c2 = C Empty Empty Empty Empty Empty Empty
+    c3 = C (NonEmpty Red) (NonEmpty Yellow)  (NonEmpty Yellow)  (NonEmpty Yellow) Empty Empty
+    c4 = C (NonEmpty Red) Empty Empty Empty Empty Empty
+    c5 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
+    c6 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
+    c7 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
+
+almostWinDiagonalBoard :: Board
+almostWinDiagonalBoard = Board $ By $ R c1 c2 c3 c4 c5 c6 c7
+  where
+    c1 = C (NonEmpty Red) Empty Empty Empty Empty Empty
+    c2 = C (NonEmpty Red) (NonEmpty Red) Empty Empty Empty Empty
+    c3 = C (NonEmpty Yellow) (NonEmpty Yellow)  (NonEmpty Red)  (NonEmpty Red) Empty Empty
+    c4 = C (NonEmpty Red) (NonEmpty Red) Empty Empty Empty Empty
+    c5 = C (NonEmpty Yellow) (NonEmpty Red) (NonEmpty Yellow) Empty Empty Empty
+    c6 = C (NonEmpty Yellow) (NonEmpty Yellow) Empty Empty Empty Empty
+    c7 = C (NonEmpty Yellow) (NonEmpty Red) Empty Empty Empty Empty
 
 {- Unit Tests -}
 
