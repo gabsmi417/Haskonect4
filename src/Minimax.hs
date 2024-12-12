@@ -21,7 +21,7 @@ import Board (
   )
 import State (State)
 import State qualified as S
-import Data.Maybe (fromJust, isJust)
+import Data.Maybe (fromJust, isJust, isNothing)
 import Test.QuickCheck
 import qualified Test.QuickCheck as QC
 
@@ -238,6 +238,15 @@ prop_winning_eval_is_playable_to_winning b =
       let b' = playGameForKMoves 3 3 b in
         evalBoard b' == 1000 || evalBoard b' == -1000
 
+prop_game_win_or_can_step :: Board -> Bool
+prop_game_win_or_can_step b =
+  let w = checkWinCondition b 
+      (e, m) = optimalMoveWithAB 3 b in
+      case w of
+        Just (Win c) -> isNothing m
+        Just Tie -> isNothing m
+        Nothing -> isJust m
+
 
 prop_eval_changes_with_depth :: Board -> Property
 prop_eval_changes_with_depth b =
@@ -271,3 +280,6 @@ qc = do
   QC.quickCheck prop_winning_eval_is_playable_to_winning
   putStrLn "eval_changes_with_depth"
   QC.quickCheck prop_eval_changes_with_depth
+  putStrLn "game_win_or_can_step"
+  QC.quickCheck prop_game_win_or_can_step
+
